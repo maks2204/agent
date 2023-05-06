@@ -12,6 +12,17 @@ const Certificate = jk.models.Certificate;
 const Priv = jk.models.Priv;
 const Box = jk.Box;
 
+  //EXPRESS JS
+  const express = require('express')
+  const app = express()
+  const port = 3000
+  
+  //app.use(express.json({limit: '50MB'}));
+
+  app.listen(port, () => {
+    console.log(`Example app listening on port ${port}`)
+  })
+
 const io = {
   stdout: process.stdout,
   readFileSync: fs.readFileSync,
@@ -19,6 +30,7 @@ const io = {
 };
 
 function error(...all) {
+  console.log("ERROR");
   if (io.stderr) {
     all.forEach((path) => io.stderr.write(path));
   } else {
@@ -117,6 +129,71 @@ async function get_local_box(key, cert, ca) {
   return box;
 }
 
+app.post('/sign', express.json({limit: '50MB'}), async (req, res) => {
+  let argv = {
+    sign: true,
+    key: req.body.keyname + ':' + req.body.keypass,
+    cert: req.body.certname,
+    input: 'test.txt',
+    output: 'test.txt.p7s',
+    tax: false,
+    tsp: 'all',
+    role: 'other',
+    detached: false,
+  }
+  try{
+  box = await get_local_box(argv.key, argv.cert, argv.ca_path);
+  ret = await do_sc(
+    argv.sign,
+    argv.crypt,
+    box,
+    argv.input,
+    argv.output,
+    argv.upload_url,
+    argv.recipient_cert,
+    argv.edrpou,
+    argv.email,
+    argv.filename,
+    argv.tax,
+    argv.detached,
+    argv.role,
+    tsp_arg(argv.tsp),
+    argv.ocsp,
+    argv.include_chain,
+    argv.encode_win,
+    argv.time && Number(argv.time),
+    res,
+    req.body.data
+  );
+  }
+  catch (e) {
+    res.status(500).send(e.message);
+  }
+})
+
+app.post('/unsign', express.json({limit: '50MB'}), async (req, res) => {
+  let argv = {
+    ca_path: 'CACertificates.p7b',
+    input: 'test.txt',
+    output: 'test.txt.p7s',
+    tsp: 'all',
+    ocsp: 'strict'
+  }
+  try{
+  box = await get_local_box(argv.key, argv.cert, argv.ca_path);
+    ret = await do_parse(
+      req.body.data,
+      res,
+      box,
+      tsp_arg(argv.tsp),
+      argv.ocsp
+    );
+  }
+  catch (e) {
+    res.status(500).send(e.message);
+  }
+})
+
 async function do_sc(
   shouldSign,
   shouldCrypt,
@@ -135,9 +212,12 @@ async function do_sc(
   ocsp,
   includeChain,
   encode_win,
-  time
+  time,
+  res,
+  dataToSign
 ) {
-  let content = await readFile(inputF);
+  //let content = await readFile(inputF);
+  let content = encoding.convert(dataToSign, "cp1251");
   let cert_rcrypt;
 
   if (shouldCrypt) {
@@ -155,6 +235,7 @@ async function do_sc(
 
   let headers;
   if (email && tax) {
+    console.log("FIRE");
     if (filename === undefined) {
       filename = inputF.replace(/\\/g, "/").split("/");
       filename = filename[filename.length - 1];
@@ -214,22 +295,24 @@ async function do_sc(
     error("Error occured inside the pipeline.");
     return false;
   }
-  if(uploadUrl) {
-    await upload(filename, tb, uploadUrl);
-  } else {
-    await output(outputF, tb, null, uploadUrl);
-  }
+  res.status(200).json({base64: tb.toString("base64")});
+  // if(uploadUrl) {
+  //   await upload(filename, tb, uploadUrl);
+  // } else {
+  //   await output(outputF, tb, null, uploadUrl);
+  // }
   return true;
 }
 
 async function do_parse(inputF, outputF, box, tsp, ocsp) {
   let content, content2;
-  if (typeof inputF === "string") {
-    content = await readFile(inputF);
-  } else if (inputF.length === 2) {
-    content = await readFile(inputF[0]);
-    content2 = await readFile(inputF[1]);
-  }
+  content = Buffer.from(inputF, "base64");
+  // if (typeof inputF === "string") {
+  //   content = await readFile(inputF);
+  // } else if (inputF.length === 2) {
+  //   content = await readFile(inputF[0]);
+  //   content2 = await readFile(inputF[1]);
+  // }
 
   const textinfo = await box.unwrap(content, content2, { tsp, ocsp });
   const rpipe = textinfo.pipe || [];
@@ -245,6 +328,7 @@ async function do_parse(inputF, outputF, box, tsp, ocsp) {
       return;
     }
     if (tr.ENCODING === "WIN") {
+      console.log("WINNNNN");
       isWin = true;
       Object.keys(tr).forEach((key) => {
         tr[key] = encoding.convert(tr[key], "utf8", "cp1251").toString();
@@ -297,7 +381,8 @@ async function do_parse(inputF, outputF, box, tsp, ocsp) {
   });
 
   if (isErr === false && outputF !== null) {
-    await output(outputF, textinfo.content, isWin);
+    //await output(outputF, textinfo.content, isWin);
+    outputF.status(200).json({base64: textinfo.content.toString("base64")});
   }
 
   return true;
@@ -349,6 +434,7 @@ async function main(argv, setIo) {
         "Please specify recipient certificate for encryption mode: --crypt filename.cert"
       );
     }
+    console.log(argv);
     ret = await do_sc(
       argv.sign,
       argv.crypt,

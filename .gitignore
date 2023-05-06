@@ -1,2 +1,7 @@
 node_modules
 coverage
+
+*.p7b
+*.jks
+*.cer
+*.dat
