@@ -137,7 +137,7 @@ app.post('/sign', express.json({limit: '50MB'}), async (req, res) => {
     input: 'test.txt',
     output: 'test.txt.p7s',
     tax: false,
-    tsp: 'all',
+    tsp: 'signature',
     role: 'other',
     detached: false,
   }
@@ -177,7 +177,7 @@ app.post('/unsign', express.json({limit: '50MB'}), async (req, res) => {
     input: 'test.txt',
     output: 'test.txt.p7s',
     tsp: 'all',
-    ocsp: 'strict'
+    ocsp: 'lax'
   }
   try{
   box = await get_local_box(argv.key, argv.cert, argv.ca_path);
@@ -217,7 +217,8 @@ async function do_sc(
   dataToSign
 ) {
   //let content = await readFile(inputF);
-  let content = encoding.convert(dataToSign, "cp1251");
+  //let content = encoding.convert(dataToSign, "cp1251");
+  let content = Buffer.from(dataToSign, 'base64');
   let cert_rcrypt;
 
   if (shouldCrypt) {
