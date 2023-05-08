@@ -2,6 +2,10 @@
 
 # Usage
 
+## Start
+
+    node ./index.js
+
 ## Sign file (czo.gov.ua/verify)
 
 Post request on http://127.0.0.1:3000/sign with json (certs must in same dir as index.js)
